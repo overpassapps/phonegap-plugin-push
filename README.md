@@ -1,5 +1,9 @@
 # phonegap-plugin-push [![Build Status](https://travis-ci.org/phonegap/phonegap-plugin-push.svg)](https://travis-ci.org/phonegap/phonegap-plugin-push)
 
+
+> NOTE: This is a fork of version 1.11.1 with a default channel added for Android.  The purpose is
+to continue using GCM with Android O and above.
+
 > Register and receive push notifications
 
 # What is this?

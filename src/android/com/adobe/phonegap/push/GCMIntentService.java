@@ -21,9 +21,9 @@ import android.graphics.Paint;
 import android.graphics.Canvas;
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.v4.app.NotificationCompat;
-import android.support.v4.app.NotificationCompat.WearableExtender;
-import android.support.v4.app.RemoteInput;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationCompat.WearableExtender;
+import androidx.core.app.RemoteInput;
 import android.text.Html;
 import android.text.Spanned;
 import android.util.Log;
@@ -257,11 +257,11 @@ public class GCMIntentService extends GcmListenerService implements PushConstant
                     newExtras.putString(newKey, valueData);
                 }
                 continue;
-            // In case we weren't working on the payload data node or the notification node,
-            // normalize the key.
-            // This allows to have "message" as the payload data key without colliding
-            // with the other "message" key (holding the body of the payload)
-            // See issue #1663
+                // In case we weren't working on the payload data node or the notification node,
+                // normalize the key.
+                // This allows to have "message" as the payload data key without colliding
+                // with the other "message" key (holding the body of the payload)
+                // See issue #1663
             } else {
                 String newKey = normalizeKey(key, messageKey, titleKey);
                 Log.d(LOG_TAG, "replace key " + key + " with " + newKey);
@@ -307,7 +307,7 @@ public class GCMIntentService extends GcmListenerService implements PushConstant
         Log.d(LOG_TAG, "forceStart =[" + forceStart + "]");
 
         if ((message != null && message.length() != 0) ||
-                (title != null && title.length() != 0)) {
+            (title != null && title.length() != 0)) {
 
             Log.d(LOG_TAG, "create notification");
 
@@ -345,6 +345,10 @@ public class GCMIntentService extends GcmListenerService implements PushConstant
         notificationIntent.putExtra(PUSH_BUNDLE, extras);
         notificationIntent.putExtra(NOT_ID, notId);
 
+
+
+
+
         int requestCode = new Random().nextInt();
         PendingIntent contentIntent = PendingIntent.getActivity(this, requestCode, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 
@@ -357,14 +361,29 @@ public class GCMIntentService extends GcmListenerService implements PushConstant
         requestCode = new Random().nextInt();
         PendingIntent deleteIntent = PendingIntent.getBroadcast(this, requestCode, dismissedNotificationIntent, PendingIntent.FLAG_CANCEL_CURRENT);
 
-        NotificationCompat.Builder mBuilder =
+       /* NotificationCompat.Builder mBuilder =
                 new NotificationCompat.Builder(context)
                         .setWhen(System.currentTimeMillis())
                         .setContentTitle(fromHtml(extras.getString(TITLE)))
                         .setTicker(fromHtml(extras.getString(TITLE)))
                         .setContentIntent(contentIntent)
                         .setDeleteIntent(deleteIntent)
-                        .setAutoCancel(true);
+                        .setAutoCancel(true);*/
+
+        NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(context, DEFAULT_CHANNEL_ID);
+
+        mBuilder.setWhen(System.currentTimeMillis())
+            .setContentTitle(fromHtml(extras.getString(TITLE)))
+            .setTicker(fromHtml(extras.getString(TITLE)))
+            .setContentIntent(contentIntent)
+            .setDeleteIntent(deleteIntent)
+            .setAutoCancel(true);
+
+        //NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        //notificationManager.notify(1, mBuilder.build());
+
+        //NotificationCompat.Builder mBuilder =  NotificationCompat.Builder(context, DEFAULT_CHANNEL_ID);
+
 
         SharedPreferences prefs = context.getSharedPreferences(PushPlugin.COM_ADOBE_PHONEGAP_PUSH, Context.MODE_PRIVATE);
         String localIcon = prefs.getString(ICON, null);
@@ -456,6 +475,9 @@ public class GCMIntentService extends GcmListenerService implements PushConstant
          */
         createActions(extras, mBuilder, resources, packageName, notId);
 
+
+
+
         mNotificationManager.notify(appName, notId, mBuilder.build());
     }
 
@@ -523,7 +545,7 @@ public class GCMIntentService extends GcmListenerService implements PushConstant
                         Log.d(LOG_TAG, "create remote input");
                         String replyLabel = "Enter your reply here";
                         remoteInput =
-                                new RemoteInput.Builder(INLINE_REPLY)
+                            new RemoteInput.Builder(INLINE_REPLY)
                                 .setLabel(replyLabel)
                                 .build();
                         actionBuilder.addRemoteInput(remoteInput);
@@ -536,7 +558,7 @@ public class GCMIntentService extends GcmListenerService implements PushConstant
                         mBuilder.addAction(wAction);
                     } else {
                         mBuilder.addAction(resources.getIdentifier(action.optString(ICON, ""), DRAWABLE, packageName),
-                                action.getString(TITLE), pIntent);
+                            action.getString(TITLE), pIntent);
                     }
                     wAction = null;
                     pIntent = null;
@@ -611,8 +633,8 @@ public class GCMIntentService extends GcmListenerService implements PushConstant
                     stacking = stacking.replace("%n%", sizeListMessage);
                 }
                 NotificationCompat.InboxStyle notificationInbox = new NotificationCompat.InboxStyle()
-                        .setBigContentTitle(fromHtml(extras.getString(TITLE)))
-                        .setSummaryText(fromHtml(stacking));
+                    .setBigContentTitle(fromHtml(extras.getString(TITLE)))
+                    .setSummaryText(fromHtml(stacking));
 
                 for (int i = messageList.size() - 1; i >= 0; i--) {
                     notificationInbox.addLine(fromHtml(messageList.get(i)));
@@ -674,7 +696,7 @@ public class GCMIntentService extends GcmListenerService implements PushConstant
             mBuilder.setSound(android.provider.Settings.System.DEFAULT_RINGTONE_URI);
         } else if (soundname != null && !soundname.contentEquals(SOUND_DEFAULT)) {
             Uri sound = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE
-                    + "://" + context.getPackageName() + "/raw/" + soundname);
+                + "://" + context.getPackageName() + "/raw/" + soundname);
             Log.d(LOG_TAG, sound.toString());
             mBuilder.setSound(sound);
         } else {

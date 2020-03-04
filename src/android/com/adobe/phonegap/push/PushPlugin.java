@@ -24,7 +24,14 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.ArrayList;
 import java.util.List;
-
+import android.app.NotificationChannel;
+import android.os.Build;
+import android.os.Bundle;
+import android.net.Uri;
+import android.content.ContentResolver;
+import android.media.AudioAttributes;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import me.leolin.shortcutbadger.ShortcutBadger;
 
 public class PushPlugin extends CordovaPlugin implements PushConstants {
@@ -44,6 +51,118 @@ public class PushPlugin extends CordovaPlugin implements PushConstants {
      */
     private Context getApplicationContext() {
         return this.cordova.getActivity().getApplicationContext();
+    }
+
+
+    private JSONArray listChannels() throws JSONException {
+        JSONArray channels = new JSONArray();
+        // only call on Android O and above
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            final NotificationManager notificationManager = (NotificationManager) cordova.getActivity()
+                .getSystemService(Context.NOTIFICATION_SERVICE);
+            List<NotificationChannel> notificationChannels = notificationManager.getNotificationChannels();
+            for (NotificationChannel notificationChannel : notificationChannels) {
+                JSONObject channel = new JSONObject();
+                channel.put(CHANNEL_ID, notificationChannel.getId());
+                channel.put(CHANNEL_DESCRIPTION, notificationChannel.getDescription());
+                channels.put(channel);
+            }
+        }
+        return channels;
+    }
+
+
+    private void deleteChannel(String channelId) {
+        // only call on Android O and above
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            final NotificationManager notificationManager = (NotificationManager) cordova.getActivity()
+                .getSystemService(Context.NOTIFICATION_SERVICE);
+            notificationManager.deleteNotificationChannel(channelId);
+        }
+    }
+
+
+    private void createChannel(JSONObject channel) throws JSONException {
+        // only call on Android O and above
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            final NotificationManager notificationManager = (NotificationManager) cordova.getActivity()
+                .getSystemService(Context.NOTIFICATION_SERVICE);
+
+            String packageName = getApplicationContext().getPackageName();
+            NotificationChannel mChannel = new NotificationChannel(channel.getString(CHANNEL_ID),
+                channel.optString(CHANNEL_DESCRIPTION, ""),
+                channel.optInt(CHANNEL_IMPORTANCE, NotificationManager.IMPORTANCE_DEFAULT));
+
+            int lightColor = channel.optInt(CHANNEL_LIGHT_COLOR, -1);
+            if (lightColor != -1) {
+                mChannel.setLightColor(lightColor);
+            }
+
+            int visibility = channel.optInt(VISIBILITY, NotificationCompat.VISIBILITY_PUBLIC);
+            mChannel.setLockscreenVisibility(visibility);
+
+            boolean badge = channel.optBoolean(BADGE, true);
+            mChannel.setShowBadge(badge);
+
+            String sound = channel.optString(SOUND, "default");
+            AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).build();
+            if (SOUND_RINGTONE.equals(sound)) {
+                mChannel.setSound(android.provider.Settings.System.DEFAULT_RINGTONE_URI, audioAttributes);
+            } else if (sound != null && sound.isEmpty()) {
+                // Disable sound for this notification channel if an empty string is passed.
+                // https://stackoverflow.com/a/47144981/6194193
+                mChannel.setSound(null, null);
+            } else if (sound != null && !sound.contentEquals(SOUND_DEFAULT)) {
+                Uri soundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + packageName + "/raw/" + sound);
+                mChannel.setSound(soundUri, audioAttributes);
+            } else {
+                mChannel.setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI, audioAttributes);
+            }
+
+            // If vibration settings is an array set vibration pattern, else set enable
+            // vibration.
+            JSONArray pattern = channel.optJSONArray(CHANNEL_VIBRATION);
+            if (pattern != null) {
+                int patternLength = pattern.length();
+                long[] patternArray = new long[patternLength];
+                for (int i = 0; i < patternLength; i++) {
+                    patternArray[i] = pattern.optLong(i);
+                }
+                mChannel.setVibrationPattern(patternArray);
+            } else {
+                boolean vibrate = channel.optBoolean(CHANNEL_VIBRATION, true);
+                mChannel.enableVibration(vibrate);
+            }
+
+            notificationManager.createNotificationChannel(mChannel);
+        }
+    }
+
+
+    private void createDefaultNotificationChannelIfNeeded(JSONObject options) {
+        String id;
+        // only call on Android O and above
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            final NotificationManager notificationManager = (NotificationManager) cordova.getActivity()
+                .getSystemService(Context.NOTIFICATION_SERVICE);
+            List<NotificationChannel> channels = notificationManager.getNotificationChannels();
+
+            for (int i = 0; i < channels.size(); i++) {
+                id = channels.get(i).getId();
+                if (id.equals(DEFAULT_CHANNEL_ID)) {
+                    return;
+                }
+            }
+            try {
+                options.put(CHANNEL_ID, DEFAULT_CHANNEL_ID);
+                options.putOpt(CHANNEL_DESCRIPTION, "PhoneGap PushPlugin");
+                createChannel(options);
+            } catch (JSONException e) {
+                Log.e(LOG_TAG, "execute: Got JSON Exception " + e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -66,9 +185,11 @@ public class PushPlugin extends CordovaPlugin implements PushConstants {
 
                         Log.v(LOG_TAG, "execute: jo=" + jo.toString());
 
-                        senderID = jo.getString(SENDER_ID);
+                        // If no NotificationChannels exist create the default one
+                        createDefaultNotificationChannelIfNeeded(jo);
 
-                        Log.v(LOG_TAG, "execute: senderID=" + senderID);
+                        senderID = jo.getString(SENDER_ID);
+                        Log.v(LOG_TAG, "execute: jo=" + jo.toString());
 
                         registration_id = InstanceID.getInstance(getApplicationContext()).getToken(senderID, GCM);
 
@@ -281,15 +402,15 @@ public class PushPlugin extends CordovaPlugin implements PushConstants {
         }
     }
 
-	/*
+    /*
      * Retrives badge count from SharedPreferences
      */
-	public static int getApplicationIconBadgeNumber(Context context){
+    public static int getApplicationIconBadgeNumber(Context context){
         SharedPreferences settings = context.getSharedPreferences(BADGE, Context.MODE_PRIVATE);
         return settings.getInt(BADGE, 0);
     }
 
-	/*
+    /*
      * Sets badge count on application icon and in SharedPreferences
      */
     public static void setApplicationIconBadgeNumber(Context context, int badgeCount) {
@@ -340,16 +461,16 @@ public class PushPlugin extends CordovaPlugin implements PushConstants {
     }
 
     /**
-    * Transform `topic name` to `topic path`
-    * Normally, the `topic` inputed from end-user is `topic name` only.
-    * We should convert them to GCM `topic path`
-    * Example:
-    *  when	    topic name = 'my-topic'
-    *  then	    topic path = '/topics/my-topic'
-    *
-    * @param    String  topic The topic name
-    * @return           The topic path
-    */
+     * Transform `topic name` to `topic path`
+     * Normally, the `topic` inputed from end-user is `topic name` only.
+     * We should convert them to GCM `topic path`
+     * Example:
+     *  when	    topic name = 'my-topic'
+     *  then	    topic path = '/topics/my-topic'
+     *
+     * @param    String  topic The topic name
+     * @return           The topic path
+     */
     private String getTopicPath(String topic) {
         if (topic.startsWith("/topics/")) {
             return topic;
@@ -379,7 +500,7 @@ public class PushPlugin extends CordovaPlugin implements PushConstants {
             }
         } catch (IOException e) {
             Log.e(LOG_TAG, "Failed to subscribe to topic: " + topic, e);
-			throw e;
+            throw e;
         } catch (IllegalArgumentException argException) {
             Log.e(LOG_TAG, "Cannot subscribe to topic [" + topic + "], illegal topic name");
         }
@@ -411,7 +532,7 @@ public class PushPlugin extends CordovaPlugin implements PushConstants {
             }
         } catch (IOException e) {
             Log.e(LOG_TAG, "Failed to unsubscribe to topic: " + topic, e);
-			throw e;
+            throw e;
         }
     }
 
@@ -479,7 +600,7 @@ public class PushPlugin extends CordovaPlugin implements PushConstants {
     }
 
     public static boolean isInForeground() {
-      return gForeground;
+        return gForeground;
     }
 
     public static boolean isActive() {
